@@ -1,0 +1,237 @@
+import customtkinter as ctk
+from tkinter import filedialog
+import subprocess
+import threading
+import os
+import sys
+import shutil
+import tempfile
+import atexit
+
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("green")
+
+ACCENT  = "#c8ff00"
+BG      = "#0d0d0d"
+SURFACE = "#161616"
+CARD    = "#1a1a1a"
+TEXT    = "#f0f0f0"
+SUBTEXT = "#666666"
+RED     = "#ff4d4d"
+GREEN   = "#c8ff00"
+
+_EXIFTOOL_TEMP = None
+
+def get_exiftool():
+    global _EXIFTOOL_TEMP
+    if _EXIFTOOL_TEMP and os.path.isfile(_EXIFTOOL_TEMP):
+        return _EXIFTOOL_TEMP
+    if hasattr(sys, "_MEIPASS"):
+        bundled_exe = os.path.join(sys._MEIPASS, "exiftool.exe")
+        bundled_files = os.path.join(sys._MEIPASS, "exiftool_files")
+        if os.path.isfile(bundled_exe):
+            tmp_dir = tempfile.mkdtemp(prefix="killoxs_")
+            dest = os.path.join(tmp_dir, "exiftool.exe")
+            shutil.copy2(bundled_exe, dest)
+            if os.path.isdir(bundled_files):
+                shutil.copytree(bundled_files, os.path.join(tmp_dir, "exiftool_files"))
+            _EXIFTOOL_TEMP = dest
+            atexit.register(shutil.rmtree, tmp_dir, ignore_errors=True)
+            return dest
+    script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    local = os.path.join(script_dir, "exiftool.exe")
+    if os.path.isfile(local):
+        return local
+    return "exiftool"
+
+
+class App(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Killoxs — ExifTool Metadata Stamper")
+        self.geometry("820x780")
+        self.minsize(700, 640)
+        self.configure(fg_color=BG)
+        self._folder = ctk.StringVar()
+        self._running = False
+        self._fields = {}
+        self._build()
+        self._center()
+
+    def _build(self):
+        ctk.CTkFrame(self, fg_color=ACCENT, height=3, corner_radius=0).pack(fill="x")
+
+        top = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
+        top.pack(fill="x", padx=30, pady=(18, 4))
+        ctk.CTkLabel(top, text="KILLOXS", font=ctk.CTkFont("Segoe UI Black", 30, "bold"), text_color=ACCENT).pack(side="left")
+        ctk.CTkLabel(top, text="  x  ExifTool Metadata Stamper", font=ctk.CTkFont("Segoe UI", 13), text_color=SUBTEXT).pack(side="left", pady=6)
+
+        self._section("TARGET FOLDER")
+        self._folder_row()
+        self._section("METADATA TO WRITE")
+        self._meta_grid()
+        self._action_row()
+        self._section("OUTPUT LOG")
+        self._log_box()
+
+        ft = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
+        ft.pack(fill="x", padx=30, pady=(4, 12))
+        ctk.CTkLabel(ft, text="killoxs.com  -  hello@killoxs.com  -  2026 Killoxs", font=ctk.CTkFont("Segoe UI", 9), text_color=SUBTEXT).pack(side="left")
+
+    def _section(self, label):
+        f = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
+        f.pack(fill="x", padx=30, pady=(10, 2))
+        ctk.CTkLabel(f, text=label, font=ctk.CTkFont("Segoe UI", 8, "bold"), text_color=SUBTEXT).pack(side="left")
+        ctk.CTkFrame(f, fg_color="#2a2a2a", height=1, corner_radius=0).pack(side="left", fill="x", expand=True, padx=(10, 0), pady=2)
+
+    def _folder_row(self):
+        row = ctk.CTkFrame(self, fg_color=CARD, corner_radius=8)
+        row.pack(fill="x", padx=30, pady=(0, 4))
+        ctk.CTkEntry(row, textvariable=self._folder, font=ctk.CTkFont("Consolas", 10), fg_color=SURFACE,
+                     border_color="#2a2a2a", text_color=TEXT, placeholder_text="Click Browse to select a folder...",
+                     state="readonly", height=40).pack(side="left", fill="x", expand=True, padx=(12, 8), pady=12)
+        ctk.CTkButton(row, text="Browse...", command=self._browse, font=ctk.CTkFont("Segoe UI", 11, "bold"),
+                      fg_color=SURFACE, hover_color="#2a2a2a", border_color=ACCENT, border_width=1,
+                      text_color=ACCENT, width=110, height=40, corner_radius=6).pack(side="right", padx=(0, 12), pady=12)
+
+    def _meta_grid(self):
+        defaults = [
+            ("Creator",       "seif abroud - killoxs"),
+            ("Artist",        "Killoxs"),
+            ("Rights",        "2026 killoxs"),
+            ("Copyright",     "2026 Killoxs"),
+            ("Credit",        "killoxs - seif abroud"),
+            ("Source",        "Killoxs.com"),
+            ("WebStatement",  "https://killoxs.com"),
+            ("Email",         "hello@killoxs.com"),
+            ("Software",      "Killoxs Killer Delux Pack"),
+            ("XMP-dc:Rights", "2026 Killoxs - https://killoxs.com"),
+        ]
+        card = ctk.CTkFrame(self, fg_color=CARD, corner_radius=8)
+        card.pack(fill="x", padx=30, pady=(0, 4))
+        grid = ctk.CTkFrame(card, fg_color=CARD, corner_radius=0)
+        grid.pack(fill="x", padx=14, pady=10)
+        grid.columnconfigure(1, weight=1)
+        grid.columnconfigure(3, weight=1)
+        for i, (key, val) in enumerate(defaults):
+            col = (i % 2) * 2
+            row = i // 2
+            ctk.CTkLabel(grid, text=key, font=ctk.CTkFont("Segoe UI", 9, "bold"), text_color=SUBTEXT, anchor="w").grid(
+                row=row, column=col, sticky="w", padx=(0, 6), pady=3)
+            var = ctk.StringVar(value=val)
+            self._fields[key] = var
+            ctk.CTkEntry(grid, textvariable=var, font=ctk.CTkFont("Consolas", 9), fg_color=SURFACE,
+                         border_color="#2a2a2a", text_color=TEXT, height=32).grid(
+                row=row, column=col + 1, sticky="ew", padx=(0, 20 if col == 0 else 0), pady=3)
+
+    def _action_row(self):
+        row = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
+        row.pack(fill="x", padx=30, pady=10)
+        self._run_btn = ctk.CTkButton(row, text="APPLY METADATA", command=self._run,
+                                      font=ctk.CTkFont("Segoe UI Black", 13), fg_color=ACCENT,
+                                      hover_color="#a8d900", text_color=BG, height=46, width=220, corner_radius=6)
+        self._run_btn.pack(side="left")
+        ctk.CTkButton(row, text="Clear Log", command=self._clear_log, font=ctk.CTkFont("Segoe UI", 10),
+                      fg_color=SURFACE, hover_color="#2a2a2a", text_color=SUBTEXT, height=46, width=100, corner_radius=6).pack(side="left", padx=(10, 0))
+        self._status = ctk.CTkLabel(row, text="", font=ctk.CTkFont("Segoe UI", 10), text_color=ACCENT)
+        self._status.pack(side="right")
+
+    def _log_box(self):
+        import tkinter as tk
+        frame = ctk.CTkFrame(self, fg_color=CARD, corner_radius=8)
+        frame.pack(fill="both", expand=True, padx=30, pady=(0, 10))
+        self._log = tk.Text(frame, font=("Consolas", 9), bg="#080808", fg="#8aaa60", insertbackground=ACCENT,
+                            bd=0, relief="flat", state="disabled", wrap="word", padx=10, pady=10,
+                            selectbackground=ACCENT, selectforeground=BG)
+        sb = ctk.CTkScrollbar(frame, command=self._log.yview)
+        self._log.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y", pady=8, padx=(0, 4))
+        self._log.pack(fill="both", expand=True, padx=(8, 0), pady=8)
+        self._log.tag_configure("ok",   foreground=GREEN)
+        self._log.tag_configure("err",  foreground=RED)
+        self._log.tag_configure("info", foreground="#4da6ff")
+
+    def _center(self):
+        self.update_idletasks()
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        w, h = self.winfo_width(), self.winfo_height()
+        self.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
+
+    def _browse(self):
+        folder = filedialog.askdirectory(title="Select folder to process")
+        if folder:
+            self._folder.set(folder)
+
+    def _clear_log(self):
+        self._log.configure(state="normal")
+        self._log.delete("1.0", "end")
+        self._log.configure(state="disabled")
+
+    def _write(self, text, tag=None):
+        self._log.configure(state="normal")
+        start = self._log.index("end - 1c")
+        self._log.insert("end", text)
+        if tag:
+            self._log.tag_add(tag, start, "end - 1c")
+        self._log.see("end")
+        self._log.configure(state="disabled")
+
+    def _set_running(self, state):
+        self._running = state
+        self._run_btn.configure(
+            state="disabled" if state else "normal",
+            text="PROCESSING..." if state else "APPLY METADATA"
+        )
+        self._status.configure(text="Running..." if state else "Done")
+
+    def _run(self):
+        folder = self._folder.get().strip()
+        if not folder or not os.path.isdir(folder):
+            self._write("No valid folder selected.\n", "err")
+            return
+        f = self._fields
+        cmd = [
+            get_exiftool(),
+            "-exif:all=", "-iptc:all=", "-xmp:all=",
+            "-Photoshop:All=", "-Photoshop:DocumentAncestors=",
+            f'-Creator={f["Creator"].get()}',
+            f'-Artist={f["Artist"].get()}',
+            f'-Rights={f["Rights"].get()}',
+            f'-Copyright={f["Copyright"].get()}',
+            f'-Credit={f["Credit"].get()}',
+            f'-Source={f["Source"].get()}',
+            f'-WebStatement={f["WebStatement"].get()}',
+            f'-Email={f["Email"].get()}',
+            f'-Software={f["Software"].get()}',
+            f'-XMP-dc:Rights={f["XMP-dc:Rights"].get()}',
+            "-overwrite_original", "-r", folder
+        ]
+        self._set_running(True)
+        self._write(f"\n{'-'*60}\n", "info")
+        self._write(f"Target: {folder}\n", "info")
+        self._write(f"{'-'*60}\n\n", "info")
+        threading.Thread(target=self._execute, args=(cmd,), daemon=True).start()
+
+    def _execute(self, cmd):
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+                                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+            for line in proc.stdout:
+                tag = "err" if any(w in line.lower() for w in ("error", "warning")) else None
+                self.after(0, self._write, line, tag)
+            proc.wait()
+            if proc.returncode == 0:
+                self.after(0, self._write, "\nDone - metadata applied successfully.\n", "ok")
+            else:
+                self.after(0, self._write, f"\nExitool exited with code {proc.returncode}\n", "err")
+        except FileNotFoundError:
+            self.after(0, self._write, "\nexiftool not found.\n", "err")
+        except Exception as ex:
+            self.after(0, self._write, f"\nError: {ex}\n", "err")
+        finally:
+            self.after(0, self._set_running, False)
+
+
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
