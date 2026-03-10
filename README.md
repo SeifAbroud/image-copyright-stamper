@@ -33,16 +33,16 @@ Built for photographers, digital artists, and content creators who want to prote
 
 | Tag | Default Value |
 |-----|---------------|
-| Creator | 
-| Artist |
+| Creator | your name 
+| Artist | your name
 | Rights | 
-| Copyright | 
-| Credit |
-| Source | 
-| WebStatement | 
-| Email | 
-| Software | 
-| XMP-dc:Rights | 
+| Copyright | © 2026
+| Credit | credit
+| Source | link
+| WebStatement | link
+| Email | your email
+| Software | software
+| XMP-dc:Rights | your links
 
 All values are editable in the UI — the defaults above are just starting points.
 
