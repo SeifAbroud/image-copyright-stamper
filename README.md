@@ -15,6 +15,9 @@ Killoxs ExifTool Stamper lets you select any folder and batch-stamp all your ima
 
 Built for photographers, digital artists, and content creators who want to protect and brand their work.
 
+<img width="821" height="809" alt="image" src="https://github.com/user-attachments/assets/919a7a6e-10b2-45f3-9d17-e2f43737fc20" />
+
+
 ---
 
 ## Features
